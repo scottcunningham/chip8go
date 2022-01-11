@@ -12,38 +12,39 @@ import (
 )
 
 const (
-	memoryBytes  = 4 * 1024
-	displayX     = 64
-	displayY     = 32
-	numRegisters = 16
-	delayRate    = time.Second / 60 // 60Hz
-	soundRate    = time.Second / 60 // 60Hz
-	stackSize    = 16
-	VF           = 0xF // flag register
+	memoryBytes    = 4 * 1024
+	numRegisters   = 16
+	delayRate      = time.Second / 60 // 60Hz
+	soundRate      = time.Second / 60 // 60Hz
+	stackSize      = 16
+	VF             = 0xF // flag register
+	fontAddress    = 0x50
+	programAddress = 0x200
 )
 
-var DefaultFont = [][]uint8{
-	[]uint8{0xF0, 0x90, 0x90, 0x90, 0xF0}, // 0
-	[]uint8{0x20, 0x60, 0x20, 0x20, 0x70}, // 1
-	[]uint8{0xF0, 0x10, 0xF0, 0x80, 0xF0}, // 2
-	[]uint8{0xF0, 0x10, 0xF0, 0x10, 0xF0}, // 3
-	[]uint8{0x90, 0x90, 0xF0, 0x10, 0x10}, // 4
-	[]uint8{0xF0, 0x80, 0xF0, 0x10, 0xF0}, // 5
-	[]uint8{0xF0, 0x80, 0xF0, 0x90, 0xF0}, // 6
-	[]uint8{0xF0, 0x10, 0x20, 0x40, 0x40}, // 7
-	[]uint8{0xF0, 0x90, 0xF0, 0x90, 0xF0}, // 8
-	[]uint8{0xF0, 0x90, 0xF0, 0x10, 0xF0}, // 9
-	[]uint8{0xF0, 0x90, 0xF0, 0x90, 0x90}, // A
-	[]uint8{0xE0, 0x90, 0xE0, 0x90, 0xE0}, // B
-	[]uint8{0xF0, 0x80, 0x80, 0x80, 0xF0}, // C
-	[]uint8{0xE0, 0x90, 0x90, 0x90, 0xE0}, // D
-	[]uint8{0xF0, 0x80, 0xF0, 0x80, 0xF0}, // E
-	[]uint8{0xF0, 0x80, 0xF0, 0x80, 0x80}, // F
+var DefaultFont = []uint8{
+	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+	0x20, 0x60, 0x20, 0x20, 0x70, // 1
+	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+	0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+	0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+	0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+	0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+	0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+	0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+	0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+	0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+	0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+	0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+	0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+	0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 }
 
 type Chip8 struct {
-	Memory        [memoryBytes]uint8
-	Display       [displayX][displayY]bool
+	Memory [memoryBytes]uint8
+	//.PixelsDisplay       [displayX][displayY]bool
+	Display       *Display
 	PC            uint16
 	IndexRegister uint16
 	Stack         [stackSize]uint16
@@ -52,18 +53,48 @@ type Chip8 struct {
 	DelayTimer    uint8
 	SoundTimer    uint8
 	timer         *time.Ticker
-	Font          [][]uint8
 	rand          *rand.Rand
 }
 
 func NewChip8() Chip8 {
 	c := Chip8{}
 	c.timer = time.NewTicker(delayRate)
-	c.Font = DefaultFont
+	c.loadFont(DefaultFont)
 
 	c.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
+	c.Display = SetupDisplay()
+
+	c.PC = programAddress
+
 	return c
+}
+
+func (c *Chip8) loadFont(font []uint8) {
+	for i, x := range font {
+		c.Memory[fontAddress+i] = x
+	}
+}
+
+func repeatStr(s string, n int) string {
+	ret := ""
+	for x := 0; x < n; x++ {
+		ret += s
+	}
+	return ret
+}
+
+func (c *Chip8) dumpMemory() {
+
+	fmt.Println(repeatStr("=", 38) + " memory dump " + repeatStr("=", 38))
+	for i, x := range c.Memory {
+		if i%16 == 0 {
+			fmt.Printf("\n 0x%03x |", i)
+		}
+		fmt.Printf(" 0x%02x", x)
+	}
+	fmt.Println()
+	fmt.Println(repeatStr("=", 36) + " end memory dump " + repeatStr("=", 36))
 }
 
 func (c *Chip8) StackPush(val uint16) {
@@ -83,41 +114,24 @@ func (c *Chip8) StackPop() uint16 {
 func (c *Chip8) Run() {
 	done := make(chan bool)
 	go c.RunTimers(done)
-	go c.ShowDisplay(done)
-
-	for {
-		// FIXME ugly lol
-		if c.PC == 4096 {
-			c.PC = 0
+	go func() {
+		for {
+			// FIXME ugly lol
+			if c.PC == 4096 {
+				c.PC = 0
+			}
+			c.Step()
 		}
-		c.Step()
-	}
-
-	done <- true
-	return
+		done <- true
+	}()
+	// can only do this from main thread, so other stuff is in goroutine
+	c.ShowDisplay(done)
 }
 
 func (c *Chip8) ShowDisplay(done chan bool) {
-	ticker := time.NewTicker(1000 * time.Millisecond)
-	for {
-		select {
-		case <-done:
-			return
-		case <-ticker.C:
-			// FIXME(nasty)
-			for x, arr := range c.Display {
-				for y := range arr {
-					val := " "
-					if c.Display[x][y] {
-						val = "x"
-					}
-					fmt.Printf("%s", val)
-				}
-				fmt.Printf("\n")
-			}
-			fmt.Printf("===========================\n")
-		}
-	}
+	//
+	// TODO: check chan
+	c.Display.Show()
 }
 
 func (c *Chip8) RunTimers(done chan bool) {
@@ -145,7 +159,7 @@ func (c *Chip8) Fetch() *Instruction {
 	rawInstr1 := c.Memory[c.PC]
 	rawInstr2 := c.Memory[c.PC+1]
 	rawInstr := uint16(rawInstr1)<<8 | uint16(rawInstr2)
-	fmt.Printf("%x %x %x\n", rawInstr1, rawInstr2, rawInstr)
+	//fmt.Printf("%x %x %x\n", rawInstr1, rawInstr2, rawInstr)
 
 	return &Instruction{
 		Prefix: uint8(0b00001111 & (rawInstr >> 12)),
@@ -168,7 +182,7 @@ type Instruction struct {
 
 func (c *Chip8) Step() {
 	instr := c.Fetch()
-	fmt.Printf("%+v %x\n", instr, instr.Raw)
+	//fmt.Printf("%+v %x\n", instr, instr.Raw)
 
 	// decode & execute
 	// stuff is split into nibbles (4 bits)
@@ -179,49 +193,46 @@ func (c *Chip8) Step() {
 	// - N (nib4) just a 4-bit number
 	// - NN (second byte) immed number
 	// - NNN (nib2+3+4) memory addr
+	fmt.Println(fmt.Sprintf("instr 0x%0X pc=0x%0X %+v", instr.Raw, c.PC, instr))
 	switch instr.Prefix {
 	case 0x0:
 		// 00E0 - clear screen
 		if instr.Y != 0xE {
-			panic("bad instr" + fmt.Sprintf("%x", instr.Raw))
+			panic(fmt.Sprintf("bad instr %x at addr", instr.Raw, c.PC))
 		}
 		c.Clear()
-		break
 	case 0x1:
 		// 1NNN - jump - set PC to NNN
 		c.PC = instr.NNN
-		break
+		// don't increment PC
+		return
 	case 0x2:
 		// 2NNN - call - set PC to NNN, but push current PC to stack first
 		c.StackPush(c.PC)
 		c.PC = instr.NNN
-		break
+		// don't increment PC
+		return
 	case 0x3:
 		// 3XNN - skip one instruction if rX == NN
 		if c.Registers[instr.X] == instr.NN {
 			c.PC += 2
 		}
-		break
 	case 0x4:
 		// 4XNN - skip one instruction if rX != NN
 		if c.Registers[instr.X] != instr.NN {
 			c.PC += 2
 		}
-		break
 	case 0x5:
 		// 5XY0 - skip one instruction if rX == rY
 		if c.Registers[instr.X] == c.Registers[instr.Y] {
 			c.PC += 2
 		}
-		break
 	case 0x6:
 		// 6XNN - set rX to NN
 		c.Registers[instr.X] = instr.NN
-		break
 	case 0x7:
 		// 7XNN - add NN to rX -- DOES NOT AFFECT CARRY FLAG
 		c.Registers[instr.X] += instr.NN
-		break
 	case 0x8:
 		switch instr.N {
 		// set
@@ -289,27 +300,22 @@ func (c *Chip8) Step() {
 				c.Registers[VF] = overflow
 
 			default:
-				panic("bad shift")
+				panic(fmt.Sprintf("bad shift instr %X at addr 0x%x", instr.Raw, c.PC))
 			}
 		}
-		break
 	case 0x9:
 		// 9XY0 - skip one instruction if rX != rY
 		if c.Registers[instr.X] != c.Registers[instr.Y] {
 			c.PC += 2
 		}
-		break
 	case 0xA:
 		// ANNN - set Index Register to NNN
 		c.IndexRegister = instr.NNN
-		break
 	case 0xB:
-		break
 	case 0xC:
 		// CXNN - generate random number, AND it with NN, put it into rX
 		val := uint8(c.rand.Intn(0xFF))
 		c.Registers[instr.X] = val & instr.NN
-		break
 	case 0xD:
 		// DXYN - draw
 		// FIXME: mvp
@@ -320,33 +326,29 @@ func (c *Chip8) Step() {
 		c.Registers[VF] = 0
 		for i := uint8(0); i < n; i++ {
 			spriteAddr := c.IndexRegister + uint16(i)
-			fmt.Printf("rm me %d%d%d%d\n", x, y, n, spriteAddr)
+			// TODO: implement
+			fmt.Sprintf("rm me %d%d%d%d\n", x, y, n, spriteAddr)
 		}
-		break
 	case 0xE:
 		// TODO: user input stuff
-		break
 	case 0xF:
 		// Timers
 		switch instr.NN {
 		// FX07 - set rX to current value of delay timer
 		case 0x07:
 			c.Registers[instr.X] = c.DelayTimer
-			break
 		// FX15 - set delay timer to current value of rX
 		case 0x15:
 			c.DelayTimer = c.Registers[instr.X]
-			break
 		// FX18 - set sound timer to current value of rX
 		case 0x18:
 			c.SoundTimer = c.Registers[instr.X]
-			break
 		default:
-			panic("bad timer instr")
+			c.dumpMemory()
+			panic(fmt.Sprintf("bad timer instr %X at addr 0x%x", instr.Raw, c.PC))
 		}
-		break
 	default:
-		panic("bad instruction")
+		panic(fmt.Sprintf("bad instr %X at addr 0x%x", instr.Raw, c.PC))
 	}
 
 	// PC increments by 2 since instructions are 16-bit, not 8
@@ -354,9 +356,9 @@ func (c *Chip8) Step() {
 }
 
 func (c *Chip8) Clear() {
-	for x, arr := range c.Display {
+	for x, arr := range c.Display.Pixels {
 		for y := range arr {
-			c.Display[x][y] = false
+			c.Display.Pixels[x][y] = false
 		}
 	}
 }
@@ -368,13 +370,7 @@ func (c *Chip8) Beep() {
 
 func (c *Chip8) Load(program []uint8) {
 	for i, v := range program {
-		c.Memory[i] = v
+		c.Memory[programAddress+i] = v
 	}
-}
-
-func main() {
-	fmt.Println("vim-go")
-	chip := NewChip8()
-	chip.Load(IBMLogo)
-	chip.Run()
+	c.PC = programAddress
 }
