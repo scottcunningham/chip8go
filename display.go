@@ -75,19 +75,6 @@ func SetupDisplay() *Display {
 	return &d
 }
 
-func (d *Display) Show() {
-	running := true
-	for running {
-		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch event.(type) {
-			case *sdl.QuitEvent:
-				running = false
-			}
-		}
-		d.Update()
-	}
-}
-
 func (d *Display) Update() {
 	// Draw background
 	d.Renderer.SetDrawColor(

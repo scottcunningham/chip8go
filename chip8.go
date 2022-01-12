@@ -10,6 +10,9 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"time"
+
+	// cleanup
+	"github.com/veandco/go-sdl2/sdl"
 )
 
 const (
@@ -21,6 +24,8 @@ const (
 	VF             = 0xF // flag register
 	fontAddress    = 0x50
 	programAddress = 0x200
+	numKeys        = 16 // hex numpad
+	KeyUnsupported = 0xff
 )
 
 var DefaultFont = []uint8{
@@ -55,6 +60,62 @@ type Chip8 struct {
 	SoundTimer    uint8
 	timer         *time.Ticker
 	rand          *rand.Rand
+	Keypad        [numKeys]bool
+}
+
+func keyToKeyIndex(key sdl.Keycode) uint8 {
+	switch key {
+	case sdl.K_1:
+		return 0x00
+	case sdl.K_2:
+		return 0x01
+	case sdl.K_3:
+		return 0x02
+	case sdl.K_4:
+		return 0x03
+	case sdl.K_q:
+		return 0x04
+	case sdl.K_w:
+		return 0x05
+	case sdl.K_e:
+		return 0x06
+	case sdl.K_r:
+		return 0x07
+	case sdl.K_a:
+		return 0x08
+	case sdl.K_s:
+		return 0x09
+	case sdl.K_d:
+		return 0x0a
+	case sdl.K_f:
+		return 0x0b
+	case sdl.K_z:
+		return 0x0c
+	case sdl.K_x:
+		return 0x0d
+	case sdl.K_c:
+		return 0x0e
+	case sdl.K_v:
+		return 0x0f
+	default:
+		return 0xff
+	}
+}
+
+func (c *Chip8) PushButton(button sdl.Keycode) {
+	idx := keyToKeyIndex(button)
+	if idx == KeyUnsupported {
+		return
+	}
+	c.Keypad[idx] = true
+}
+
+func (c *Chip8) ReleaseButton(button sdl.Keycode) {
+	idx := keyToKeyIndex(button)
+	if idx == KeyUnsupported {
+		return
+	}
+	c.Keypad[idx] = false
 }
 
 func NewChip8() Chip8 {
@@ -129,7 +190,24 @@ func (c *Chip8) Run(hz int) {
 func (c *Chip8) ShowDisplay(done chan bool) {
 	//
 	// TODO: check chan
-	c.Display.Show()
+
+	running := true
+	for running {
+		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+			switch t := event.(type) {
+			case *sdl.QuitEvent:
+				running = false
+			case *sdl.KeyboardEvent:
+				keyCode := t.Keysym.Sym
+				if t.State == sdl.RELEASED {
+					c.ReleaseButton(keyCode)
+				} else if t.State == sdl.PRESSED {
+					c.PushButton(keyCode)
+				}
+			}
+		}
+		c.Display.Update()
+	}
 }
 
 func (c *Chip8) RunTimers(done chan bool) {
