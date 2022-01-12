@@ -7,6 +7,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"time"
 )
@@ -188,7 +189,7 @@ func (c *Chip8) Step() {
 	// - N (nib4) just a 4-bit number
 	// - NN (second byte) immed number
 	// - NNN (nib2+3+4) memory addr
-	//fmt.Printf("instr 0x%0X pc=0x%0X %+v\n", instr.Raw, c.PC, instr)
+	fmt.Printf("instr 0x%0X pc=0x%0X %+v\n", instr.Raw, c.PC, instr)
 	switch instr.Prefix {
 	case 0x0:
 		// 00E0 - clear screen
@@ -316,18 +317,15 @@ func (c *Chip8) Step() {
 		x := c.Registers[instr.X] % displayX
 		y := c.Registers[instr.Y] % displayY
 		n := instr.N
-		pixel := uint8(0)
+		row := uint8(0)
 
 		c.Registers[VF] = 0
 		for yLine := uint8(0); yLine < n; yLine++ {
 			spriteAddr := c.IndexRegister + uint16(yLine)
-			pixel = c.Memory[spriteAddr]
+			row = c.Memory[spriteAddr]
 			for xLine := uint8(0); xLine < 8; xLine++ {
-				currentPixelIsOn := (pixel&(0b10000000>>xLine) != 0)
-				//currentPixelIsOn := (pixel&(1<<xLine) != 0)
-				// FIXME: bugs
+				currentPixelIsOn := (row&(0b10000000>>xLine) != 0)
 				if currentPixelIsOn {
-					fmt.Printf("pixel=%b x=%d curX=%d y=%d curY=%d height=%d\n", pixel, x, xLine, y, yLine, n)
 					// If the current pixel in the sprite row is on and the pixel at
 					// coordinates X,Y on the screen is also on, turn off the pixel and set VF to 1
 					if c.Display.Pixels[x+xLine][y+yLine] {
@@ -386,4 +384,13 @@ func (c *Chip8) Load(program []uint8) {
 		c.Memory[programAddress+i] = v
 	}
 	c.PC = programAddress
+}
+
+func (c *Chip8) LoadFromFile(filename string) error {
+	bytes, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	c.Load(bytes)
+	return nil
 }

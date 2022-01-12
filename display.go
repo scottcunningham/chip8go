@@ -64,10 +64,10 @@ func SetupDisplay() *Display {
 	for x := 0; x < displayX; x++ {
 		for y := 0; y < displayY; y++ {
 			d.Rects[x][y] = sdl.Rect{
-				int32(cellSize * x),
-				int32(cellSize * y),
-				cellSize,
-				cellSize,
+				int32(cellSize*x) + 1,
+				int32(cellSize*y) + 1,
+				cellSize - 2,
+				cellSize - 2,
 			}
 		}
 	}
