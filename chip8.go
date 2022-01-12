@@ -420,6 +420,25 @@ func (c *Chip8) Step() {
 		}
 	case 0xE:
 		// TODO: user input stuff
+		switch instr.NN {
+		case 0x9E:
+			// EX9E -- skip instruction if keys[val of rX] is pressed
+			keyIdx := c.Registers[instr.X]
+			if c.Keypad[keyIdx] {
+				c.PC += 2
+			}
+			break
+		// EXA1
+		case 0xA1:
+			// EXA1 -- skip instruction if keys[val of rX] is NOT pressed
+			keyIdx := c.Registers[instr.X]
+			if !c.Keypad[keyIdx] {
+				c.PC += 2
+			}
+			break
+		default:
+			panic(fmt.Sprintf("bad input instr %X at addr 0x%x", instr.Raw, c.PC))
+		}
 	case 0xF:
 		// Timers
 		switch instr.NN {
