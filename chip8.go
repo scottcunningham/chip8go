@@ -111,16 +111,13 @@ func (c *Chip8) StackPop() uint16 {
 	return val
 }
 
-func (c *Chip8) Run() {
+func (c *Chip8) Run(hz int) {
 	done := make(chan bool)
 	go c.RunTimers(done)
 	go func() {
 		for {
-			// FIXME ugly lol
-			if c.PC == 4096 {
-				c.PC = 0
-			}
 			c.Step()
+			time.Sleep(time.Millisecond * time.Duration(1000/hz))
 		}
 		done <- true
 	}()
@@ -159,7 +156,6 @@ func (c *Chip8) Fetch() *Instruction {
 	rawInstr1 := c.Memory[c.PC]
 	rawInstr2 := c.Memory[c.PC+1]
 	rawInstr := uint16(rawInstr1)<<8 | uint16(rawInstr2)
-	//fmt.Printf("%x %x %x\n", rawInstr1, rawInstr2, rawInstr)
 
 	return &Instruction{
 		Prefix: uint8(0b00001111 & (rawInstr >> 12)),
@@ -182,7 +178,6 @@ type Instruction struct {
 
 func (c *Chip8) Step() {
 	instr := c.Fetch()
-	//fmt.Printf("%+v %x\n", instr, instr.Raw)
 
 	// decode & execute
 	// stuff is split into nibbles (4 bits)
@@ -193,12 +188,12 @@ func (c *Chip8) Step() {
 	// - N (nib4) just a 4-bit number
 	// - NN (second byte) immed number
 	// - NNN (nib2+3+4) memory addr
-	fmt.Println(fmt.Sprintf("instr 0x%0X pc=0x%0X %+v", instr.Raw, c.PC, instr))
+	//fmt.Printf("instr 0x%0X pc=0x%0X %+v\n", instr.Raw, c.PC, instr)
 	switch instr.Prefix {
 	case 0x0:
 		// 00E0 - clear screen
 		if instr.Y != 0xE {
-			panic(fmt.Sprintf("bad instr %x at addr", instr.Raw, c.PC))
+			panic(fmt.Sprintf("bad instr %x at addr 0x%x", instr.Raw, c.PC))
 		}
 		c.Clear()
 	case 0x1:
@@ -318,16 +313,34 @@ func (c *Chip8) Step() {
 		c.Registers[instr.X] = val & instr.NN
 	case 0xD:
 		// DXYN - draw
-		// FIXME: mvp
 		x := c.Registers[instr.X] % displayX
 		y := c.Registers[instr.Y] % displayY
 		n := instr.N
+		pixel := uint8(0)
 
 		c.Registers[VF] = 0
-		for i := uint8(0); i < n; i++ {
-			spriteAddr := c.IndexRegister + uint16(i)
-			// TODO: implement
-			fmt.Sprintf("rm me %d%d%d%d\n", x, y, n, spriteAddr)
+		for yLine := uint8(0); yLine < n; yLine++ {
+			spriteAddr := c.IndexRegister + uint16(yLine)
+			pixel = c.Memory[spriteAddr]
+			for xLine := uint8(0); xLine < 8; xLine++ {
+				currentPixelIsOn := (pixel&(0b10000000>>xLine) != 0)
+				//currentPixelIsOn := (pixel&(1<<xLine) != 0)
+				// FIXME: bugs
+				if currentPixelIsOn {
+					fmt.Printf("pixel=%b x=%d curX=%d y=%d curY=%d height=%d\n", pixel, x, xLine, y, yLine, n)
+					// If the current pixel in the sprite row is on and the pixel at
+					// coordinates X,Y on the screen is also on, turn off the pixel and set VF to 1
+					if c.Display.Pixels[x+xLine][y+yLine] {
+						c.Display.Pixels[x+xLine][y+yLine] = false
+						c.Registers[VF] = 1
+					} else {
+						// Or if the current pixel in the sprite row is on and the screen pixel is not,
+						// draw the pixel at the X and Y coordinates
+						c.Display.Pixels[x+xLine][y+yLine] = true
+					}
+					// TODO: check for edge of screen!
+				}
+			}
 		}
 	case 0xE:
 		// TODO: user input stuff

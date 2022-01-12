@@ -82,7 +82,6 @@ func (d *Display) Show() {
 			switch event.(type) {
 			case *sdl.QuitEvent:
 				running = false
-				break
 			}
 		}
 		d.Update()

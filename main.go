@@ -8,5 +8,5 @@ func main() {
 	chip.Display.Pixels[15][30] = true
 	chip.Display.Pixels[4][12] = true
 	//chip.ShowDisplay(make(chan bool))
-	chip.Run()
+	chip.Run(6)
 }
