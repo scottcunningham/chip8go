@@ -41,11 +41,11 @@ func (d *Display) TearDown() {
 	defer d.window.Destroy()
 }
 
-func SetupDisplay() *Display {
+func SetupDisplay() (*Display, error) {
 	d := Display{}
 
 	if err := sdl.Init(sdl.INIT_EVERYTHING); err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	var err error
@@ -58,12 +58,12 @@ func SetupDisplay() *Display {
 		sdl.WINDOW_SHOWN,
 	)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	renderer, err := sdl.CreateRenderer(d.window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	d.Renderer = renderer
@@ -79,7 +79,7 @@ func SetupDisplay() *Display {
 		}
 	}
 
-	return &d
+	return &d, nil
 }
 
 func (d *Display) Update() {

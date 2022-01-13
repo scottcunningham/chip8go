@@ -122,12 +122,15 @@ func NewChip8() Chip8 {
 	c.loadFont(DefaultFont)
 
 	c.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	c.Display = SetupDisplay()
-
 	c.PC = programAddress
 
 	return c
+}
+
+func (c *Chip8) InitDisplay() error {
+	var err error
+	c.Display, err = SetupDisplay()
+	return err
 }
 
 func (c *Chip8) loadFont(font []uint8) {
