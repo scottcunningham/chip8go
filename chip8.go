@@ -351,6 +351,23 @@ func (c *Chip8) Step() {
 			} else {
 				c.Registers[VF] = 0
 			}
+		// shift
+		case 6:
+			//   8XY6 - shift right
+			// TODO: implement original version where rX is set to rY before continuing
+			x := c.Registers[instr.X]
+			overflow := (x & 0b00000001)
+			c.Registers[instr.X] = x >> 1
+			c.Registers[VF] = overflow
+		//   8XYE - shift left
+		case 0xE:
+			// TODO: implement original version where rX is set to rY before continuing
+			x := c.Registers[instr.X]
+			overflow := (x & 0b10000000) >> 7
+			c.Registers[instr.X] = x << 1
+			c.Registers[VF] = overflow
+			fmt.Println("x=", x, "vf=", c.Registers[VF])
+		// 8XY7 - subtract
 		case 7:
 			//   8XY7 - set rX to vlaue of rY - rX - AFFECTS CARRY FLAG IN AMBIGUOUS WAY
 			x, y := c.Registers[instr.X], c.Registers[instr.Y]
@@ -360,28 +377,8 @@ func (c *Chip8) Step() {
 			} else {
 				c.Registers[VF] = 0
 			}
-		// shift
-		case 6:
-			switch instr.N {
-			//   8XY6 - shift right
-			case 0x6:
-				// TODO: implement original version where rX is set to rY before continuing
-				x := c.Registers[instr.X]
-				overflow := (x & 0b00000001)
-				c.Registers[instr.X] = x >> 1
-				c.Registers[VF] = overflow
-
-			//   8XYE - shift left
-			case 0xE:
-				// TODO: implement original version where rX is set to rY before continuing
-				x := c.Registers[instr.X]
-				overflow := (x & 0b10000000) >> 7
-				c.Registers[instr.X] = x << 1
-				c.Registers[VF] = overflow
-
-			default:
-				panic(fmt.Sprintf("bad shift instr %X at addr 0x%x", instr.Raw, c.PC))
-			}
+		default:
+			panic(fmt.Sprintf("bad shift instr %X at addr 0x%x", instr.Raw, c.PC))
 		}
 	case 0x9:
 		// 9XY0 - skip one instruction if rX != rY
