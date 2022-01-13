@@ -1,0 +1,20 @@
+Tested ROMs
+-----------
+
+Working:
+--
+Maze (alt) [David Winter, 199x]     -- OK!
+ZeroPong [zeroZshadow, 2007]        -- OK! Controls seem weird though.
+
+
+Partially working:
+--
+test_opcode                         -- everything draws correctly apart from 'F3'
+Trip8 Demo (2008) [Revival Studios] -- seems to freeze before the face animation
+Paddles                             -- screen flickers, not sure if it responds to input
+Particle Demo [zeroZshadow, 2008]   -- particles don't seem to travel around correctly, get stuck in a line
+
+
+Broken:
+--
+Space Invaders [David\ Winter]      -- instruction E9A1 (EXA1) instruction causes panic

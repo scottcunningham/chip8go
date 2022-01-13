@@ -1,0 +1,5 @@
+TODO:
+- implement "quirk mode"
+    - CLI flags for turning different bits of legacy/new behaviour on
+- make a list of buggy instructions
+- compatibility list of tested games
