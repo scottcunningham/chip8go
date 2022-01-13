@@ -5,7 +5,8 @@ import (
 )
 
 type Args struct {
-	ROM string `short:"r" long:"rom" description:"Path to chip-8 ROM to execute" required:"yes"`
+	ROM         string `short:"r" long:"rom" description:"Path to chip-8 ROM to execute" required:"yes"`
+	RefreshRate int    `long:"refresh-rate" description:"Cycles per second" default:"60"`
 }
 
 func main() {
@@ -17,5 +18,5 @@ func main() {
 
 	chip := NewChip8()
 	chip.LoadFromFile(args.ROM)
-	chip.Run(6)
+	chip.Run(args.RefreshRate)
 }

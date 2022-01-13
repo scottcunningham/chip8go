@@ -270,11 +270,17 @@ func (c *Chip8) Step() {
 	fmt.Printf("instr 0x%0X pc=0x%0X %+v\n", instr.Raw, c.PC, instr)
 	switch instr.Prefix {
 	case 0x0:
+		switch instr.NN {
 		// 00E0 - clear screen
-		if instr.Y != 0xE {
+		case 0xE0:
+			c.Clear()
+		// 00EE - return from subroutine
+		case 0xEE:
+			c.PC = c.StackPop()
+			// TODO: should we avoid incrementing PC after pop?
+		default:
 			panic(fmt.Sprintf("bad instr %x at addr 0x%x", instr.Raw, c.PC))
 		}
-		c.Clear()
 	case 0x1:
 		// 1NNN - jump - set PC to NNN
 		c.PC = instr.NNN
@@ -386,6 +392,10 @@ func (c *Chip8) Step() {
 		// ANNN - set Index Register to NNN
 		c.IndexRegister = instr.NNN
 	case 0xB:
+		// BXNN or BNNN - jump with offset
+		// TODO: support superchip BXNN behaviour (PC = NNN)
+		// that would be: c.PC = c.Registers[instr.X] + instr.NNN
+		c.PC = uint16(c.Registers[0]) + instr.NNN
 	case 0xC:
 		// CXNN - generate random number, AND it with NN, put it into rX
 		val := uint8(c.rand.Intn(0xFF))
@@ -451,6 +461,54 @@ func (c *Chip8) Step() {
 		// FX18 - set sound timer to current value of rX
 		case 0x18:
 			c.SoundTimer = c.Registers[instr.X]
+		// FX1E - add value in rX to index register
+		case 0x1E:
+			c.IndexRegister += uint16(c.Registers[instr.X])
+		// FX0A - get key (blocking)
+		case 0x0A:
+			anyPressed := false
+			for idx, pressed := range c.Keypad {
+				if pressed {
+					c.Registers[instr.X] = uint8(idx)
+					anyPressed = true
+				}
+			}
+			// Block until a key is pressed
+			if !anyPressed {
+				c.PC -= 2
+			}
+		// FX29 - set IndexRegister to font character at index = (value of rX)
+		case 0x29:
+			characterIndex := c.Registers[instr.X]
+			c.IndexRegister = fontAddress + (5 * uint16(characterIndex))
+		// FX33 - binary-coded decimal conversion
+		case 0x33:
+			// Take the value in rX, convert it to 3 decimal digits and store them
+			// in the 3 memory indices starting with the one pointed to by
+			// the Index Register
+			val := c.Registers[instr.X]
+			hundreds := val / 100
+			c.Memory[c.IndexRegister] = hundreds
+
+			tens := (val / 10) % 10
+			c.Memory[c.IndexRegister+1] = tens
+
+			ones := val % 10
+			c.Memory[c.IndexRegister+2] = ones
+		// FX55 - store registers in memory
+		case 0x55:
+			// TODO: support legacy behaviour where IndexRegister is left incremented
+			// after instruction
+			for idx, val := range c.Registers {
+				c.Memory[c.IndexRegister+uint16(idx)] = val
+			}
+		// FX65 - load registers from memory
+		case 0x65:
+			// TODO: support legacy behaviour where IndexRegister is left incremented
+			// after instruction
+			for idx := range c.Registers {
+				c.Registers[idx] = c.Memory[c.IndexRegister+uint16(idx)]
+			}
 		default:
 			c.dumpMemory()
 			panic(fmt.Sprintf("bad timer instr %X at addr 0x%x", instr.Raw, c.PC))
