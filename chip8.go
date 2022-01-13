@@ -48,8 +48,7 @@ var DefaultFont = []uint8{
 }
 
 type Chip8 struct {
-	Memory [memoryBytes]uint8
-	//.PixelsDisplay       [displayX][displayY]bool
+	Memory        [memoryBytes]uint8
 	Display       *Display
 	PC            uint16
 	IndexRegister uint16
@@ -302,7 +301,6 @@ func (c *Chip8) Step() error {
 		// 00EE - return from subroutine
 		case 0xEE:
 			c.PC = c.StackPop()
-			// TODO: should we avoid incrementing PC after pop?
 		default:
 			panic(fmt.Sprintf("bad instr %x at addr 0x%x", instr.Raw, c.PC))
 		}
@@ -383,16 +381,14 @@ func (c *Chip8) Step() error {
 			//   8XY6 - shift right
 			// TODO(quirk_mode): implement original version where rX is set to rY before continuing
 			x := c.Registers[instr.X]
-			overflow := (x & 0b00000001)
+			c.Registers[VF] = (x & 0b00000001) // set VF to LSB before we shift
 			c.Registers[instr.X] = x >> 1
-			c.Registers[VF] = overflow
 		//   8XYE - shift left
 		case 0xE:
 			// TODO(quirk_mode): implement original version where rX is set to rY before continuing
 			x := c.Registers[instr.X]
-			overflow := (x & 0b10000000) >> 7
+			c.Registers[VF] = x >> 7 // set VF to MSB
 			c.Registers[instr.X] = x << 1
-			c.Registers[VF] = overflow
 		// 8XY7 - subtract
 		case 7:
 			//   8XY7 - set rX to vlaue of rY - rX - AFFECTS CARRY FLAG IN AMBIGUOUS WAY
@@ -465,7 +461,6 @@ func (c *Chip8) Step() error {
 				c.PC += 2
 			}
 			break
-		// EXA1
 		case 0xA1:
 			// EXA1 -- skip instruction if keys[val of rX] is NOT pressed
 			keyIdx := c.Registers[instr.X]
