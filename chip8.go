@@ -381,14 +381,14 @@ func (c *Chip8) Step() error {
 		// shift
 		case 6:
 			//   8XY6 - shift right
-			// TODO: implement original version where rX is set to rY before continuing
+			// TODO(quirk_mode): implement original version where rX is set to rY before continuing
 			x := c.Registers[instr.X]
 			overflow := (x & 0b00000001)
 			c.Registers[instr.X] = x >> 1
 			c.Registers[VF] = overflow
 		//   8XYE - shift left
 		case 0xE:
-			// TODO: implement original version where rX is set to rY before continuing
+			// TODO(quirk_mode): implement original version where rX is set to rY before continuing
 			x := c.Registers[instr.X]
 			overflow := (x & 0b10000000) >> 7
 			c.Registers[instr.X] = x << 1
@@ -416,7 +416,7 @@ func (c *Chip8) Step() error {
 		c.IndexRegister = instr.NNN
 	case 0xB:
 		// BNNN or BXNN - jump with offset
-		// TODO: support legacy BNNN behaviour (PC = NNN)
+		// TODO(quirk_mode): support legacy BNNN behaviour (PC = NNN)
 		// that would be: c.PC = c.Registers[0] + instr.NNN
 		c.PC = uint16(c.Registers[instr.X]) + instr.NNN
 	case 0xC:
@@ -524,14 +524,14 @@ func (c *Chip8) Step() error {
 			c.Memory[c.IndexRegister+2] = ones
 		// FX55 - store registers in memory
 		case 0x55:
-			// TODO: support legacy behaviour where IndexRegister is left incremented
+			// TODO(quirk_mode): support legacy behaviour where IndexRegister is left incremented
 			// after instruction
 			for idx, val := range c.Registers {
 				c.Memory[c.IndexRegister+uint16(idx)] = val
 			}
 		// FX65 - load registers from memory
 		case 0x65:
-			// TODO: support legacy behaviour where IndexRegister is left incremented
+			// TODO(quirk_mode): support legacy behaviour where IndexRegister is left incremented
 			// after instruction
 			for idx := range c.Registers {
 				c.Registers[idx] = c.Memory[c.IndexRegister+uint16(idx)]
