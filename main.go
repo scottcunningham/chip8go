@@ -1,9 +1,11 @@
 package main
 
 import (
-	"github.com/jessevdk/go-flags"
+	"fmt"
 	"os"
 	"runtime/pprof"
+
+	"github.com/jessevdk/go-flags"
 )
 
 type Args struct {
@@ -21,7 +23,7 @@ func main() {
 	}
 
 	if args.Profile != nil {
-		f, err := os.Create(args.Profile)
+		f, err := os.Create(*args.Profile)
 		if err != nil {
 			panic(err)
 		}
@@ -32,5 +34,8 @@ func main() {
 	chip := NewChip8()
 	chip.DebugMode = args.DebugMode
 	chip.LoadFromFile(args.ROM)
-	chip.Run(args.RefreshRate)
+	if err := chip.Run(args.RefreshRate); err != nil {
+		fmt.Println("CHIP execution returned error:", err)
+		chip.DumpMemory()
+	}
 }

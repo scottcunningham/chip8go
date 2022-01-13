@@ -6,20 +6,20 @@ package main
 //
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"time"
 
-	// cleanup
 	"github.com/veandco/go-sdl2/sdl"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
 	memoryBytes    = 4 * 1024
 	numRegisters   = 16
-	delayRate      = time.Second / 60 // 60Hz
-	soundRate      = time.Second / 60 // 60Hz
 	stackSize      = 16
 	VF             = 0xF // flag register
 	fontAddress    = 0x50
@@ -145,9 +145,8 @@ func repeatStr(s string, n int) string {
 	return ret
 }
 
-func (c *Chip8) dumpMemory() {
-
-	fmt.Println(repeatStr("=", 38) + " memory dump " + repeatStr("=", 38))
+func (c *Chip8) DumpMemory() {
+	fmt.Printf(repeatStr("=", 38) + " memory dump " + repeatStr("=", 38))
 	for i, x := range c.Memory {
 		if i%16 == 0 {
 			fmt.Printf("\n 0x%03x |", i)
@@ -158,12 +157,13 @@ func (c *Chip8) dumpMemory() {
 	fmt.Println(repeatStr("=", 36) + " end memory dump " + repeatStr("=", 36))
 }
 
-func (c *Chip8) StackPush(val uint16) {
+func (c *Chip8) StackPush(val uint16) error {
 	if c.StackIndex == stackSize {
-		panic("stack overflow")
+		return errors.New("stack overflow")
 	}
 	c.StackIndex++
 	c.Stack[c.StackIndex] = val
+	return nil
 }
 
 func (c *Chip8) StackPop() uint16 {
@@ -172,44 +172,66 @@ func (c *Chip8) StackPop() uint16 {
 	return val
 }
 
-func (c *Chip8) Run(hz int) {
+func (c *Chip8) Run(hz int) error {
 	done := make(chan bool)
-	go c.RunTimers(hz, done)
-	go func() {
-		for {
-			c.Step()
-			time.Sleep(time.Millisecond * time.Duration(1000/hz))
-		}
-		done <- true
-	}()
+	delayRate := 1000 * time.Millisecond / time.Duration(hz)
+
+	group, _ := errgroup.WithContext(context.Background())
+	group.Go(func() error { c.RunTimers(delayRate, done); return nil })
+	group.Go(func() error { return c.run(delayRate, done) })
 	// can only do this from main thread, so other stuff is in goroutine
 	c.ShowDisplay(done)
+
+	return group.Wait()
 }
 
-func (c *Chip8) ShowDisplay(done chan bool) {
-	//
-	// TODO: check chan
-
-	running := true
-	for running {
-		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch t := event.(type) {
-			case *sdl.QuitEvent:
-				running = false
-			case *sdl.KeyboardEvent:
-				keyCode := t.Keysym.Sym
-				if t.State == sdl.RELEASED {
-					c.ReleaseButton(keyCode)
-				} else if t.State == sdl.PRESSED {
-					c.PushButton(keyCode)
-				}
+func (c *Chip8) run(delayRate time.Duration, done chan bool) error {
+	var err error
+	timer := time.NewTicker(delayRate)
+	for {
+		select {
+		case <-done:
+			return nil
+		case <-timer.C:
+			err = c.Step()
+			if err != nil {
+				done <- true
+				done <- true
+				return err
 			}
 		}
-		c.Display.Update()
 	}
 }
 
-func (c *Chip8) RunTimers(hz int, done chan bool) {
+func (c *Chip8) ShowDisplay(done chan bool) {
+	defer c.Display.TearDown()
+
+	for {
+		select {
+		case <-done:
+			return
+		default:
+			for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+				switch t := event.(type) {
+				case *sdl.QuitEvent:
+					done <- true
+					done <- true
+					return
+				case *sdl.KeyboardEvent:
+					keyCode := t.Keysym.Sym
+					if t.State == sdl.RELEASED {
+						c.ReleaseButton(keyCode)
+					} else if t.State == sdl.PRESSED {
+						c.PushButton(keyCode)
+					}
+				}
+			}
+			c.Display.Update()
+		}
+	}
+}
+
+func (c *Chip8) RunTimers(delayRate time.Duration, done chan bool) {
 	timer := time.NewTicker(delayRate)
 
 	for {
@@ -256,7 +278,7 @@ type Instruction struct {
 	Raw         uint16
 }
 
-func (c *Chip8) Step() {
+func (c *Chip8) Step() error {
 	instr := c.Fetch()
 
 	// decode & execute
@@ -288,13 +310,15 @@ func (c *Chip8) Step() {
 		// 1NNN - jump - set PC to NNN
 		c.PC = instr.NNN
 		// don't increment PC
-		return
+		return nil
 	case 0x2:
 		// 2NNN - call - set PC to NNN, but push current PC to stack first
-		c.StackPush(c.PC)
+		if err := c.StackPush(c.PC); err != nil {
+			return err
+		}
 		c.PC = instr.NNN
 		// don't increment PC
-		return
+		return nil
 	case 0x3:
 		// 3XNN - skip one instruction if rX == NN
 		if c.Registers[instr.X] == instr.NN {
@@ -380,7 +404,7 @@ func (c *Chip8) Step() {
 				c.Registers[VF] = 0
 			}
 		default:
-			panic(fmt.Sprintf("bad shift instr %X at addr 0x%x", instr.Raw, c.PC))
+			return errors.New(fmt.Sprintf("bad shift instr %X at addr 0x%x", instr.Raw, c.PC))
 		}
 	case 0x9:
 		// 9XY0 - skip one instruction if rX != rY
@@ -429,12 +453,10 @@ func (c *Chip8) Step() {
 						// draw the pixel at the X and Y coordinates
 						c.Display.Pixels[x+xLine][y+yLine] = true
 					}
-					// TODO: check for edge of screen!
 				}
 			}
 		}
 	case 0xE:
-		// TODO: user input stuff
 		switch instr.NN {
 		case 0x9E:
 			// EX9E -- skip instruction if keys[val of rX] is pressed
@@ -452,7 +474,7 @@ func (c *Chip8) Step() {
 			}
 			break
 		default:
-			panic(fmt.Sprintf("bad input instr %X at addr 0x%x", instr.Raw, c.PC))
+			return errors.New(fmt.Sprintf("bad input instr %X at addr 0x%x", instr.Raw, c.PC))
 		}
 	case 0xF:
 		// Timers
@@ -515,15 +537,15 @@ func (c *Chip8) Step() {
 				c.Registers[idx] = c.Memory[c.IndexRegister+uint16(idx)]
 			}
 		default:
-			c.dumpMemory()
-			panic(fmt.Sprintf("bad timer instr %X at addr 0x%x", instr.Raw, c.PC))
+			return errors.New(fmt.Sprintf("bad timer instr %X at addr 0x%x", instr.Raw, c.PC))
 		}
 	default:
-		panic(fmt.Sprintf("bad instr %X at addr 0x%x", instr.Raw, c.PC))
+		return errors.New(fmt.Sprintf("bad instr %X at addr 0x%x", instr.Raw, c.PC))
 	}
 
 	// PC increments by 2 since instructions are 16-bit, not 8
 	c.PC += 2
+	return nil
 }
 
 func (c *Chip8) Clear() {
@@ -535,7 +557,7 @@ func (c *Chip8) Clear() {
 }
 
 func (c *Chip8) Beep() {
-	// TODO beep
+	// TODO beep with sdl
 	fmt.Print("\a")
 }
 

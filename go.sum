@@ -8,5 +8,7 @@ github.com/malashin/go-sdl2 v0.0.0-20180501165632-f4b9ce451e14 h1:bb1cYP0jOvIWtb
 github.com/malashin/go-sdl2 v0.0.0-20180501165632-f4b9ce451e14/go.mod h1:ulRtxicVtJ9JfH1tDtH+mZgMi8XPQfwJLOQzz4PTlik=
 github.com/veandco/go-sdl2 v0.4.11 h1:Swle6dX6zPoP2mGNMU/R589ET+nnWLeC4Ic+mn2xzfc=
 github.com/veandco/go-sdl2 v0.4.11/go.mod h1:OROqMhHD43nT4/i9crJukyVecjPNYYuCofep6SNiAjY=
+golang.org/x/sync v0.0.0-20210220032951-036812b2e83c h1:5KslGYwFpkhGh+Q16bwMP3cOontH8FOep7tGV86Y7SQ=
+golang.org/x/sync v0.0.0-20210220032951-036812b2e83c/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4 h1:EZ2mChiOa8udjfp6rRmswTbtZN/QzUQp4ptM4rnjHvc=
 golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=

@@ -7,6 +7,7 @@ package main
 //   https://github.com/catsocks/sdl-grid/blob/master/main.c
 
 import "github.com/veandco/go-sdl2/sdl"
+import "fmt"
 
 const (
 	displayX = 64
@@ -31,6 +32,13 @@ type Display struct {
 	Pixels   [displayX][displayY]bool
 	Rects    [displayX][displayY]sdl.Rect
 	Renderer *sdl.Renderer
+	window   *sdl.Window
+}
+
+func (d *Display) TearDown() {
+	fmt.Println("tearing down display")
+	defer sdl.Quit()
+	defer d.window.Destroy()
 }
 
 func SetupDisplay() *Display {
@@ -39,9 +47,9 @@ func SetupDisplay() *Display {
 	if err := sdl.Init(sdl.INIT_EVERYTHING); err != nil {
 		panic(err)
 	}
-	//defer sdl.Quit()
 
-	window, err := sdl.CreateWindow(
+	var err error
+	d.window, err = sdl.CreateWindow(
 		"Chip8",
 		sdl.WINDOWPOS_UNDEFINED,
 		sdl.WINDOWPOS_UNDEFINED,
@@ -52,9 +60,8 @@ func SetupDisplay() *Display {
 	if err != nil {
 		panic(err)
 	}
-	//defer window.Destroy()
 
-	renderer, err := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
+	renderer, err := sdl.CreateRenderer(d.window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
 		panic(err)
 	}
