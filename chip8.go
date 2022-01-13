@@ -415,9 +415,9 @@ func (c *Chip8) Step() error {
 		c.IndexRegister = instr.NNN
 	case 0xB:
 		// BNNN or BXNN - jump with offset
-		// TODO(quirk_mode): support legacy BNNN behaviour (PC = NNN)
-		// that would be: c.PC = c.Registers[0] + instr.NNN
-		c.PC = uint16(c.Registers[instr.X]) + instr.NNN
+		// TODO(quirk_mode): support BXNN behaviour (PC = rX + NNN)
+		// c.PC = uint16(c.Registers[instr.X]) + instr.NNN
+		c.PC = uint16(c.Registers[0]) + instr.NNN
 	case 0xC:
 		// CXNN - generate random number, AND it with NN, put it into rX
 		val := uint8(c.rand.Intn(0xFF))
