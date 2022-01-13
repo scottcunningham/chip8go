@@ -58,7 +58,6 @@ type Chip8 struct {
 	Registers     [numRegisters]uint8
 	DelayTimer    uint8
 	SoundTimer    uint8
-	timer         *time.Ticker
 	rand          *rand.Rand
 	Keypad        [numKeys]bool
 }
@@ -66,13 +65,13 @@ type Chip8 struct {
 func keyToKeyIndex(key sdl.Keycode) uint8 {
 	switch key {
 	case sdl.K_1:
-		return 0x00
-	case sdl.K_2:
 		return 0x01
-	case sdl.K_3:
+	case sdl.K_2:
 		return 0x02
-	case sdl.K_4:
+	case sdl.K_3:
 		return 0x03
+	case sdl.K_4:
+		return 0x0C
 	case sdl.K_q:
 		return 0x04
 	case sdl.K_w:
@@ -80,23 +79,23 @@ func keyToKeyIndex(key sdl.Keycode) uint8 {
 	case sdl.K_e:
 		return 0x06
 	case sdl.K_r:
-		return 0x07
+		return 0x0D
 	case sdl.K_a:
-		return 0x08
+		return 0x07
 	case sdl.K_s:
-		return 0x09
+		return 0x08
 	case sdl.K_d:
-		return 0x0a
+		return 0x09
 	case sdl.K_f:
-		return 0x0b
+		return 0x0E
 	case sdl.K_z:
-		return 0x0c
+		return 0x0A
 	case sdl.K_x:
-		return 0x0d
+		return 0x00
 	case sdl.K_c:
-		return 0x0e
+		return 0x0B
 	case sdl.K_v:
-		return 0x0f
+		return 0x0F
 	default:
 		return 0xff
 	}
@@ -120,7 +119,6 @@ func (c *Chip8) ReleaseButton(button sdl.Keycode) {
 
 func NewChip8() Chip8 {
 	c := Chip8{}
-	c.timer = time.NewTicker(delayRate)
 	c.loadFont(DefaultFont)
 
 	c.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -175,7 +173,7 @@ func (c *Chip8) StackPop() uint16 {
 
 func (c *Chip8) Run(hz int) {
 	done := make(chan bool)
-	go c.RunTimers(done)
+	go c.RunTimers(hz, done)
 	go func() {
 		for {
 			c.Step()
@@ -210,12 +208,14 @@ func (c *Chip8) ShowDisplay(done chan bool) {
 	}
 }
 
-func (c *Chip8) RunTimers(done chan bool) {
+func (c *Chip8) RunTimers(hz int, done chan bool) {
+	timer := time.NewTicker(delayRate)
+
 	for {
 		select {
 		case <-done:
 			return
-		case <-c.timer.C:
+		case <-timer.C:
 			if c.DelayTimer != 0 {
 				c.DelayTimer -= 1
 			}
@@ -392,10 +392,10 @@ func (c *Chip8) Step() {
 		// ANNN - set Index Register to NNN
 		c.IndexRegister = instr.NNN
 	case 0xB:
-		// BXNN or BNNN - jump with offset
-		// TODO: support superchip BXNN behaviour (PC = NNN)
-		// that would be: c.PC = c.Registers[instr.X] + instr.NNN
-		c.PC = uint16(c.Registers[0]) + instr.NNN
+		// BNNN or BXNN - jump with offset
+		// TODO: support legacy BNNN behaviour (PC = NNN)
+		// that would be: c.PC = c.Registers[0] + instr.NNN
+		c.PC = uint16(c.Registers[instr.X]) + instr.NNN
 	case 0xC:
 		// CXNN - generate random number, AND it with NN, put it into rX
 		val := uint8(c.rand.Intn(0xFF))
@@ -409,11 +409,17 @@ func (c *Chip8) Step() {
 
 		c.Registers[VF] = 0
 		for yLine := uint8(0); yLine < n; yLine++ {
+			if y+yLine >= displayY {
+				break
+			}
 			spriteAddr := c.IndexRegister + uint16(yLine)
 			row = c.Memory[spriteAddr]
 			for xLine := uint8(0); xLine < 8; xLine++ {
 				currentPixelIsOn := (row&(0b10000000>>xLine) != 0)
 				if currentPixelIsOn {
+					if x+xLine >= displayX {
+						break
+					}
 					// If the current pixel in the sprite row is on and the pixel at
 					// coordinates X,Y on the screen is also on, turn off the pixel and set VF to 1
 					if c.Display.Pixels[x+xLine][y+yLine] {
