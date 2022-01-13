@@ -60,6 +60,7 @@ type Chip8 struct {
 	SoundTimer    uint8
 	rand          *rand.Rand
 	Keypad        [numKeys]bool
+	DebugMode     bool
 }
 
 func keyToKeyIndex(key sdl.Keycode) uint8 {
@@ -267,7 +268,9 @@ func (c *Chip8) Step() {
 	// - N (nib4) just a 4-bit number
 	// - NN (second byte) immed number
 	// - NNN (nib2+3+4) memory addr
-	fmt.Printf("instr 0x%0X pc=0x%0X %+v\n", instr.Raw, c.PC, instr)
+	if c.DebugMode {
+		fmt.Printf("instr 0x%0X pc=0x%0X %+v\n", instr.Raw, c.PC, instr)
+	}
 	switch instr.Prefix {
 	case 0x0:
 		switch instr.NN {
@@ -366,7 +369,6 @@ func (c *Chip8) Step() {
 			overflow := (x & 0b10000000) >> 7
 			c.Registers[instr.X] = x << 1
 			c.Registers[VF] = overflow
-			fmt.Println("x=", x, "vf=", c.Registers[VF])
 		// 8XY7 - subtract
 		case 7:
 			//   8XY7 - set rX to vlaue of rY - rX - AFFECTS CARRY FLAG IN AMBIGUOUS WAY
