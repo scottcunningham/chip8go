@@ -481,6 +481,9 @@ func (c *Chip8) Step() error {
 		case 0xA1:
 			// EXA1 -- skip instruction if keys[val of rX] is NOT pressed
 			keyIdx := c.Registers[instr.X]
+			if keyIdx > numKeys {
+				return fmt.Errorf("tried to access invalid key at index 0x%X", keyIdx)
+			}
 			if !c.Keypad[keyIdx] {
 				c.PC += 2
 			}
