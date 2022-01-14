@@ -9,10 +9,12 @@ import (
 )
 
 type Args struct {
-	ROM         string  `short:"r" long:"rom" description:"Path to chip-8 ROM to execute" required:"yes"`
-	RefreshRate int     `long:"refresh-rate" description:"Cycles per second" default:"60"`
-	DebugMode   bool    `short:"d" long:"debug" description:"Print verbose data about instructions"`
-	Profile     *string `long:"profile" description:"Dump a CPU profile into the given file"`
+	ROM         string `short:"r" long:"rom" description:"Path to chip-8 ROM to execute" required:"yes"`
+	RefreshRate int    `long:"refresh-rate" description:"Cycles per second" default:"60"`
+	// Debugging options
+	Profile   *string `long:"profile" description:"Dump a CPU profile into the given file"`
+	DebugMode bool    `short:"d" long:"debug" description:"Print verbose data about instructions"`
+	StepMode  bool    `long:"step-mode" description:"Step through instructions one at a time"`
 }
 
 func main() {
@@ -36,6 +38,7 @@ func main() {
 	chip := NewChip8()
 	chip.DebugMode = args.DebugMode
 	chip.LoadFromFile(args.ROM)
+	chip.StepMode = args.StepMode
 	if err := chip.InitDisplay(); err != nil {
 		fmt.Println("CHIP display init returned error:", err)
 		os.Exit(-1)

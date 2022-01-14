@@ -60,6 +60,8 @@ type Chip8 struct {
 	rand          *rand.Rand
 	Keypad        [numKeys]bool
 	DebugMode     bool
+	StepMode      bool
+	ReadyToStep   bool
 }
 
 func keyToKeyIndex(key sdl.Keycode) uint8 {
@@ -102,6 +104,11 @@ func keyToKeyIndex(key sdl.Keycode) uint8 {
 }
 
 func (c *Chip8) PushButton(button sdl.Keycode) {
+	if c.StepMode && button == sdl.K_SPACE {
+		c.ReadyToStep = true
+		return
+	}
+
 	idx := keyToKeyIndex(button)
 	if idx == KeyUnsupported {
 		return
@@ -283,6 +290,13 @@ type Instruction struct {
 func (c *Chip8) Step() error {
 	instr := c.Fetch()
 
+	// Wait to continue until a key is pressed
+	if c.StepMode {
+		for !c.ReadyToStep {
+			time.Sleep(100 * time.Millisecond)
+		}
+		c.ReadyToStep = false
+	}
 	// decode & execute
 	// stuff is split into nibbles (4 bits)
 	// extract the following:
@@ -293,7 +307,7 @@ func (c *Chip8) Step() error {
 	// - NN (second byte) immed number
 	// - NNN (nib2+3+4) memory addr
 	if c.DebugMode {
-		fmt.Printf("instr 0x%0X pc=0x%0X %+v\n", instr.Raw, c.PC, instr)
+		fmt.Printf("instr 0x%0X pc=0x%0X ir=0x%0X regs=%v\n", instr.Raw, c.PC, c.IndexRegister, c.Registers)
 	}
 	switch instr.Prefix {
 	case 0x0:
